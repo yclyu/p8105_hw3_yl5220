@@ -1,0 +1,151 @@
+---
+title: "p8105_hw3_yl5220"
+output: html_document
+date: "2022-10-17"
+---
+
+# Set up
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggridges)
+library(patchwork)
+library(ggplot2)
+
+library(p8105.datasets)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+
+## Problem 2
+
+# Question 1: Load, tidy, and otherwise wrangle the data.
+```{r}
+acms_data = 
+  read_csv("accel_data.csv") %>% 
+  janitor::clean_names() %>% 
+  mutate(weekday_vs_weekend = recode(day, 
+                                     "Monday" = "Weekday",
+                                     "Tuesday" = "Weekday",
+                                     "Wednesday" = "Weekday",
+                                     "Thursday" = "Weekday",
+                                     "Friday" = "Weekday",
+                                     "Saturday" = "Weekend",
+                                     "Sunday" = "Weekend")) %>% 
+  pivot_longer(
+    activity_1:activity_1440,
+    names_to = "activity_min",
+    names_prefix = "activity_",
+    values_to = "activity_num") %>% 
+  relocate(weekday_vs_weekend, .after = day)
+  
+acms_data
+```
+Description of the resulting dataset: Variables existing include week showing which week it is, day_id showing each specific day, day showing which day in the week, weekday_vs_weekend showing whether the day is weekday or weekend, activity_min showing the minute of the day, and activity_num showing the number of activities for the minute. There are 'r nrow(acms_data)' observations in total, and 'r ncol(acms_data)' variables in total. 
+
+# Question 2:Aggregate across minutes to create a total activity variable for each day, and create a table showing these totals. 
+```{r}
+acms_data %>% 
+  group_by(day_id) %>% 
+  summarize(total_activity = sum(activity_num)) %>% 
+  knitr::kable()
+```
+It appears that the activity counts can be very low some days compared to other days, such as the 1440.00 number of activities on day whose day_id is 31.
+# Qeustion 3: Make a single-panel plot that shows the 24-hour activity time courses for each day and use color to indicate day of the week.
+```{r}
+acms_data %>% 
+  mutate(
+    activity_hour = as.numeric(activity_min) %/% 60) %>% 
+  ggplot(aes(x = activity_min, y = activity_num)) + 
+  geom_point(aes(color = day), alpha = .5) +
+  geom_line(aes(color = day))
+```
+It appears that the number of activities on weekends (such as the ones shown in purple and dark greens) is higher that that on weekdays (such as the ones shown in light yellow and light greens.)
+
+
+## Problem 3
+
+# Question 1: Do some data cleaning. Create separate variables for year, month, and day. Ensure observations for temperature, precipitation, and snowfall are given in reasonable units.
+```{r}
+data("ny_noaa")
+
+ny_noaa = 
+  ny_noaa %>% 
+  as_tibble(ny_noaa) %>% 
+  janitor::clean_names() %>% 
+  #filter(tmin != "NA")
+  separate(col = date, into = c("Year", "Month", "Day"), sep = "-") %>% 
+  mutate(prcp_mm = prcp*10) %>% 
+  relocate(prcp_mm, .after = Day) %>% 
+  select(-prcp)
+
+ny_noaa
+
+ny_noaa %>% 
+  count(snow) %>% 
+  arrange(desc(n))
+
+```
+The most commonly observed value is 0 for snowfall, as snowfall usually occurs during winter.
+
+# Qeustion 2. Make a two-panel plot showing the average max temperature in January and in July in each station across years. Is there any observable / interpretable structure? Any outliers?
+```{r}
+ny_noaa %>% 
+  filter(Month %in% c("01", "07")) %>% 
+  group_by(id, Year, Month) %>% 
+  summarize(ave_tmax = mean(as.numeric(tmax)/10, na.rm = TRUE)) %>% 
+  ggplot(aes(x = Year, y = ave_tmax, color = id, group = id)) +
+  geom_point(alpha = .5) +
+  geom_line(alpha = .5) +
+  facet_grid(~ Month) +
+  theme(legend.position = "none") +
+  labs(
+    title = "Average max temperature in January and in July in each station across years",
+    x = "Year",
+    y = "Average Max Temperature (degree celcius)"
+  )
+
+```
+Based on the plot, it appears that the average max temparature of January (fluctuates around 0) is lower than that of July (centered around 26), which is understandable as January is still in winter while July is in summer. There are some outliers, such as January 1982 and July 1988.
+
+# Question 3: Make a two-panel plot showing (i) tmax vs tmin for the full dataset (note that a scatterplot may not be the best option); and (ii) make a plot showing the distribution of snowfall values greater than 0 and less than 100 separately by year.
+```{r}
+temp <- ny_noaa %>% 
+  ggplot(aes(x = tmin, y = tmax)) +
+  geom_hex() +
+  theme(legend.position = "bottom") +
+  labs(
+    title = "tmax vs tmin for the full dataset",
+    x = "tmin (degree)",
+    y = "tmax (degree)"
+  )
+
+snowfall <- ny_noaa %>% 
+  filter(0 < snow & snow < 100) %>% 
+  ggplot(aes(x = snow, y = Year)) + 
+  geom_density_ridges() +
+  labs(
+    title = "Distribution of Snowfalls by Year",
+    x = "Year",
+    y = "snowfall (mm)"
+  )
+
+temp + snowfall
+```
+
